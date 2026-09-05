@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <title>Coding Hub — Coding with Suninda</title>
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="ambient-glow glow-1" aria-hidden="true"></div>
+  <div class="ambient-glow glow-2" aria-hidden="true"></div>
+  <div class="ambient-glow glow-3" aria-hidden="true"></div>
+
+<section id="loginPage" class="login-page" aria-label="Coding Hub sign in">
+  <div class="login-shell">
+    <div class="login-intro">
+      <div class="intro-bg-grid" aria-hidden="true"></div>
+      <div class="login-brand">
+        <div class="logo">&lt;/&gt;</div>
+        <div><b>Coding Hub</b><small>Coding with Suninda • Node.js Edition</small></div>
+      </div>
+      <div class="intro-copy">
+        <div class="badge-pill">
+          <span class="live-dot"></span>
+          <span>NEXT-GEN DEVELOPER WORKSPACE</span>
+        </div>
+        <h1>Learn with focus.<br><span class="gradient-text">Build with confidence.</span></h1>
+        <p>A unified coding studio to master algorithms, run code in real-time on our Node.js engine, and download curated study guides.</p>
+      </div>
+
+      <div class="feature-pills">
+        <div class="feat-chip"><span>⚡</span> Real-Time Compilers</div>
+        <div class="feat-chip"><span>📘</span> PDF Study Library</div>
+        <div class="feat-chip"><span>🎯</span> 20+ Languages</div>
+      </div>
+
+      <div class="login-preview" aria-hidden="true">
+        <div class="preview-top">
+          <div class="window-controls">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+          </div>
+          <div class="preview-title">
+            <span>learner_path.js</span>
+          </div>
+          <em class="sync-badge">● Node.js Active</em>
+        </div>
+        <pre><code><span class="code-purple">const</span> <span class="code-blue">learner</span> = {
+  <span class="code-yellow">goal</span>: <span class="code-green">"Full-Stack Master"</span>,
+  <span class="code-yellow">status</span>: <span class="code-green">"Ready to compile"</span>
+};
+
+<span class="code-purple">async function</span> <span class="code-blue">startJourney</span>() {
+  <span class="code-purple">await</span> <span class="code-blue">CodingHub</span>.<span class="code-yellow">learn</span>(<span class="code-green">"Node.js"</span>);
+  <span class="code-blue">console</span>.<span class="code-yellow">log</span>(<span class="code-green">"🚀 Code executed cleanly!"</span>);
+}</code></pre>
+        <div class="preview-footer">
+          <span><b>20+</b> languages ready</span>
+          <span class="status-ready">Compiler Online ↗</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="login-panel">
+      <div class="mobile-login-brand login-brand">
+        <div class="logo">&lt;/&gt;</div>
+        <div><b>Coding Hub</b><small>Coding with Suninda</small></div>
+      </div>
+
+      <!-- Auth Tabs -->
+      <div class="auth-tabs" role="tablist">
+        <button type="button" id="tabSignIn" class="tab-btn active" role="tab" aria-selected="true">Sign In</button>
+        <button type="button" id="tabSignUp" class="tab-btn" role="tab" aria-selected="false">Create Account</button>
+      </div>
+
+      <div class="login-heading">
+        <span class="eyebrow" id="formEyebrow">WELCOME BACK</span>
+        <h2 id="formTitle">Sign in to your workspace</h2>
+        <p id="formSubtitle">Continue where you left off and keep your coding streak alive.</p>
+      </div>
+
+      <!-- Quick Demo Autofill Bar -->
+      <div class="demo-autofill-banner">
+        <span>⚡ Want a quick test?</span>
+        <button type="button" id="quickDemoBtn">Autofill Demo Account</button>
+      </div>
+
+      <form id="loginForm" class="login-form">
+        <!-- Name field (shown on register mode) -->
+        <div id="nameFieldGroup" class="form-group" style="display:none;">
+          <label for="loginName">Your Name</label>
+          <div class="input-wrapper">
+            <span class="input-icon">👤</span>
+            <input id="loginName" type="text" placeholder="Suninda Gayen" autocomplete="name">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="loginEmail">Email address</label>
+          <div class="input-wrapper">
+            <span class="input-icon">✉️</span>
+            <input id="loginEmail" type="email" placeholder="you@example.com" autocomplete="email" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="field-row">
+            <label for="loginPassword">Password</label>
+            <a href="#" id="forgotPassword" class="accent-link">Forgot password?</a>
+          </div>
+          <div class="input-wrapper password-field">
+            <span class="input-icon">🔒</span>
+            <input id="loginPassword" type="password" placeholder="Enter your password" autocomplete="current-password" required minlength="4">
+            <button type="button" class="password-toggle" id="togglePassword" onclick="togglePassword()" aria-label="Show password">Show</button>
+          </div>
+        </div>
+
+        <label class="remember">
+          <input id="rememberMe" type="checkbox" checked>
+          <span class="checkbox-custom"></span>
+          <span class="remember-text">Keep me signed in on this device</span>
+        </label>
+
+        <button class="login-submit" id="submitBtn" type="submit">
+          <span id="btnText">Sign in to Coding Hub</span>
+          <span class="btn-arrow" aria-hidden="true">↗</span>
+        </button>
+
+        <div id="loginMessageBox" class="login-message-box" role="status" style="display:none;">
+          <span id="loginMessageIcon"></span>
+          <span id="loginMessageText"></span>
+        </div>
+      </form>
+
+      <div class="login-divider"><span>or continue with</span></div>
+      <button class="social-login" id="googleLogin" type="button">
+        <svg class="google-svg" viewBox="0 0 24 24" width="18" height="18">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        Continue with Google
+      </button>
+      <p class="signup-copy" id="switchCopy">New to Coding Hub? <a href="#" id="switchModeLink" class="accent-link">Create an account</a></p>
+
+      <div class="server-status-pill">
+        <span class="status-indicator"></span>
+        <span>Node.js Backend • localhost:3000</span>
+      </div>
+    </div>
+  </div>
+</section>
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="brand" onclick="showPage('home')">
+      <div class="logo">&lt;/&gt;</div>
+      <div><b>Coding Hub</b><small>Coding with Suninda</small></div>
+    </div>
+    <nav>
+      <button onclick="showPage('home')">Home</button>
+      <button onclick="showPage('courses')">Courses</button>
+      <button onclick="showPage('compiler')">Compiler</button>
+      <button onclick="showPage('pdfs')">PDF Library</button>
+      <button onclick="showPage('admin')">Admin</button>
+      <span id="currentUserBadge" style="display:none; color:#34d399; font-weight:600; font-size:0.88rem; padding: 4px 8px; border-radius: 6px; background: rgba(52,211,153,0.1);"></span>
+      <button id="userLogoutBtn" onclick="userLogout()" style="color:#f87171;">Sign Out</button>
+    </nav>
+  </header>
+  <main>
+    <section id="home" class="page active">
+      <div class="hero">
+        <div class="hero-copy">
+          <span class="pill">CODING HUB • LEARN • CODE • RUN</span>
+          <h1>Build your coding skills from <span>Basic → Advanced</span></h1>
+          <p>Learn programming concepts, read study PDFs, write code and run it from one beautiful coding workspace.</p>
+          <div class="actions">
+            <button class="primary" onclick="showPage('compiler')">Open Compiler →</button>
+            <button class="ghost" onclick="showPage('courses')">Explore Courses</button>
+          </div>
+          <div class="typing"><span id="typed"></span><span class="cursor">▌</span></div>
+        </div>
+        <div class="hero-card">
+          <div class="terminal-head"><i></i><i></i><i></i><span>coding_hub</span></div>
+          <pre><code>const learner = "Suninda";
+console.log("Welcome to Coding Hub");
+startLearning(learner);</code></pre>
+          <div class="run-line">● Ready to compile</div>
+        </div>
+      </div>
+      <div class="stats">
+        <div><b>20+</b><span>Languages</span></div>
+        <div><b>50+</b><span>Topics</span></div>
+        <div><b>PDF</b><span>Study Library</span></div>
+        <div><b>RUN</b><span>Online Compiler</span></div>
+      </div>
+    </section>
+
+    <section id="courses" class="page">
+      <div class="section-title"><span>LEARNING PATH</span><h2>Programming Courses</h2><p>Choose a language and move from fundamentals to advanced concepts.</p></div>
+      <div id="courseGrid" class="grid"></div>
+    </section>
+
+    <section id="compiler" class="page">
+      <div class="section-title"><span>CODE LAB</span><h2>Online Compiler</h2><p>Write code, select a language and send it to the configured execution server.</p></div>
+        <div class="compiler-toolbar">
+          <select id="language"></select>
+          <button class="ghost" onclick="loadStarter()">Starter Code</button>
+          <button class="primary" onclick="runCode()">▶ Run Code</button>
+        </div>
+        <div class="editor-wrap">
+          <div class="line-numbers" id="lines">1</div>
+          <textarea id="code" spellcheck="false"></textarea>
+        </div>
+        <div class="output"><div class="output-head"><span>OUTPUT</span><span id="status">Ready</span></div><pre id="output">Click “Run Code” to execute your program.</pre></div>
+      </div>
+    </section>
+
+    <section id="pdfs" class="page">
+      <div class="section-title"><span>KNOWLEDGE BASE</span><h2>PDF Library</h2><p>Download the included study guides. Admins can add more PDF links later.</p></div>
+      <div id="pdfGrid" class="grid"></div>
+    </section>
+
+    <section id="admin" class="page">
+      <div class="section-title"><span>CONTROL PANEL</span><h2>Admin Sign-in</h2><p>Node.js backend secured control panel. Manage courses, study materials and view live server stats.</p></div>
+      <div class="admin-card">
+        <div id="loginBox">
+          <input id="adminUser" placeholder="Admin username" autocomplete="username">
+          <input id="adminPass" type="password" placeholder="Password" autocomplete="current-password">
+          <button class="primary" onclick="adminLogin()">Sign In</button>
+          <small>Demo: admin / codinghub (Configurable in .env)</small>
+        </div>
+        <div id="panelBox" hidden>
+          <h3>Welcome, Admin 👋</h3>
+          <div id="adminStatsDisplay"></div>
+          <div class="admin-tools">
+            <button class="ghost" onclick="showPage('pdfs')">Manage PDF Library</button>
+            <button class="ghost" onclick="showPage('courses')">Manage Courses</button>
+          </div>
+          <button class="danger" onclick="adminLogout()" style="margin-top:16px">Sign Out</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer>© 2026 Coding Hub • Coding with Suninda</footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

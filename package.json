@@ -1,0 +1,25 @@
+{
+  "name": "coding-hub",
+  "version": "1.0.0",
+  "description": "Coding Hub — Coding with Suninda Full Node.js Platform",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "coding-hub",
+    "learning-platform",
+    "compiler",
+    "nodejs",
+    "express"
+  ],
+  "author": "Coding with Suninda",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}

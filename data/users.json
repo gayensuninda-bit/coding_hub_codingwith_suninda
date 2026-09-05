@@ -1,0 +1,18 @@
+[
+  {
+    "id": "usr_demo_1",
+    "name": "Suninda",
+    "email": "demo@codinghub.com",
+    "passwordHash": "codinghub123",
+    "role": "student",
+    "createdAt": "2026-09-01T00:00:00.000Z"
+  },
+  {
+    "id": "usr_mtolejpb",
+    "name": "teststudent",
+    "email": "teststudent@example.com",
+    "passwordHash": "7a5c81b387ec59effeb5e02b32cf4c983fc9158a1e49ea3dff779e0b4aa2f7b0",
+    "role": "student",
+    "createdAt": "2026-09-05T16:23:56.735Z"
+  }
+]
