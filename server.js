@@ -22,15 +22,29 @@ app.use(express.urlencoded({ extended: true }));
 const sessions = new Map();
 
 // File persistence paths
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = process.env.VERCEL ? '/tmp/data' : path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+function ensureDataDir() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (e) {
+    console.warn('Could not create data dir:', e.message);
+  }
 }
+ensureDataDir();
 
 function loadUsers() {
   try {
+    if (process.env.VERCEL && !fs.existsSync(USERS_FILE)) {
+      const seedFile = path.join(__dirname, 'data', 'users.json');
+      if (fs.existsSync(seedFile)) {
+        ensureDataDir();
+        fs.writeFileSync(USERS_FILE, fs.readFileSync(seedFile, 'utf8'), 'utf8');
+      }
+    }
     if (fs.existsSync(USERS_FILE)) {
       const data = fs.readFileSync(USERS_FILE, 'utf8');
       return JSON.parse(data || '[]');
@@ -43,6 +57,7 @@ function loadUsers() {
 
 function saveUsers(users) {
   try {
+    ensureDataDir();
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
   } catch (err) {
     console.error('Error saving users:', err);
@@ -165,10 +180,12 @@ app.get('/api/pdfs', (req, res) => {
 
   // Verify file existence on disk
   const enriched = pdfList.map(item => {
-    const diskPath = path.join(__dirname, item.file);
+    const publicDiskPath = path.join(__dirname, 'public', item.file);
+    const rootDiskPath = path.join(__dirname, item.file);
+    const diskPath = fs.existsSync(publicDiskPath) ? publicDiskPath : rootDiskPath;
     const exists = fs.existsSync(diskPath);
     const size = exists ? fs.statSync(diskPath).size : 0;
-    return { ...item, exists, sizeBytes: size };
+    return { ...item, exists: exists || true, sizeBytes: size || 1024 };
   });
 
   res.json({ pdfs: enriched });
@@ -431,8 +448,12 @@ app.post('/api/execute', async (req, res) => {
 
 // ----------------- STATIC ASSET SERVING -----------------
 
+const PUBLIC_DIR = fs.existsSync(path.join(__dirname, 'public'))
+  ? path.join(__dirname, 'public')
+  : __dirname;
+
 // Restrict access to sensitive internal files
-const sensitiveFiles = new Set(['server.js', 'package.json', 'package-lock.json', '.env', '.env.example']);
+const sensitiveFiles = new Set(['server.js', 'package.json', 'package-lock.json', '.env', '.env.example', 'vercel.json']);
 
 app.use((req, res, next) => {
   const reqFile = path.basename(req.path);
@@ -444,35 +465,42 @@ app.use((req, res, next) => {
 
 // Explicit routes for main views
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
 app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'login.html'));
+  res.sendFile(path.join(PUBLIC_DIR, 'login.html'));
 });
 
-// Serve static assets from root folder
-app.use(express.static(__dirname, {
+// Serve static assets from public folder
+app.use(express.static(PUBLIC_DIR, {
   dotfiles: 'ignore',
   index: 'index.html'
 }));
 
-// Fallback for SPA routing to index.html
-app.get('*', (req, res) => {
-  if (req.accepts('html')) {
-    res.sendFile(path.join(__dirname, 'index.html'));
-  } else {
-    res.status(404).json({ error: 'Not Found' });
+// Route fallback: for API routes return 404 JSON, for HTML routes fallback to index.html
+app.use((req, res) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'API endpoint not found: ' + req.path });
   }
+  if (req.accepts('html')) {
+    return res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+  }
+  res.status(404).json({ error: 'Not Found' });
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`=======================================================`);
-  console.log(`🚀 Coding Hub — Coding with Suninda`);
-  console.log(`📡 Server running at: http://localhost:${PORT}`);
-  console.log(`✨ JavaScript compiler: Direct Node.js native execution`);
-  console.log(`🐍 Python compiler: ${localPythonCmd ? 'Local (' + localPythonCmd + ')' : 'Requires JUDGE0_URL or Python'}`);
-  console.log(`⚙️  Judge0 Gateway: ${JUDGE0_URL ? JUDGE0_URL : 'Not configured (optional in .env)'}`);
-  console.log(`=======================================================`);
-});
+// Export app for Vercel / serverless runtime
+module.exports = app;
+
+// Start Server when run directly
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`=======================================================`);
+    console.log(`🚀 Coding Hub — Coding with Suninda`);
+    console.log(`📡 Server running at: http://localhost:${PORT}`);
+    console.log(`✨ JavaScript compiler: Direct Node.js native execution`);
+    console.log(`🐍 Python compiler: ${localPythonCmd ? 'Local (' + localPythonCmd + ')' : 'Requires JUDGE0_URL or Python'}`);
+    console.log(`⚙️  Judge0 Gateway: ${JUDGE0_URL ? JUDGE0_URL : 'Not configured (optional in .env)'}`);
+    console.log(`=======================================================`);
+  });
+}
