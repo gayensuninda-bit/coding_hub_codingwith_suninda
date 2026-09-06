@@ -2,16 +2,23 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const crypto = require('crypto');
 const vm = require('vm');
 const { execSync, spawnSync } = require('child_process');
 require('dotenv').config();
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JUDGE0_URL = (process.env.JUDGE0_URL || '').replace(/\/$/, '');
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'codinghub';
+
+// Initialize Aiven MySQL Database asynchronously
+db.initDatabase().catch(err => {
+  console.error('MySQL database startup notice:', err.message);
+});
 
 // Middleware
 app.use(cors());
@@ -134,6 +141,50 @@ for (const cmd of ['python', 'py', 'python3']) {
   } catch (e) {}
 }
 
+function processOutput(result) {
+  const stdout = result.stdout || '';
+  const stderr = result.stderr || '';
+  if (result.error) return `${stdout}${stderr}${result.error.message}`.trim();
+  return `${stdout}${stderr}`.trim();
+}
+
+function executeLocalProgram(language, code) {
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-hub-run-'));
+  const options = { encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 512 };
+  try {
+    let sourcePath;
+    let compileResult;
+    let runResult;
+    if (language === 'c' || language === 'cpp') {
+      sourcePath = path.join(workDir, language === 'c' ? 'main.c' : 'main.cpp');
+      fs.writeFileSync(sourcePath, code, 'utf8');
+      const executable = path.join(workDir, process.platform === 'win32' ? 'main.exe' : 'main');
+      const compiler = language === 'c' ? 'gcc' : 'g++';
+      const flags = language === 'c' ? [sourcePath, '-O2', '-o', executable] : [sourcePath, '-std=c++17', '-O2', '-o', executable];
+      compileResult = spawnSync(compiler, flags, options);
+      if (compileResult.status !== 0 || compileResult.error) return { output: processOutput(compileResult) || `${language.toUpperCase()} compilation failed.`, status: 'Compilation Error' };
+      runResult = spawnSync(executable, [], options);
+    } else if (language === 'java') {
+      sourcePath = path.join(workDir, 'Main.java');
+      fs.writeFileSync(sourcePath, code, 'utf8');
+      compileResult = spawnSync('javac', [sourcePath], options);
+      if (compileResult.status !== 0 || compileResult.error) return { output: processOutput(compileResult) || 'Java compilation failed.', status: 'Compilation Error' };
+      runResult = spawnSync('java', ['-cp', workDir, 'Main'], options);
+    } else if (language === 'python' && localPythonCmd) {
+      sourcePath = path.join(workDir, 'main.py');
+      fs.writeFileSync(sourcePath, code, 'utf8');
+      runResult = spawnSync(localPythonCmd, ['-I', sourcePath], options);
+    } else {
+      return null;
+    }
+    const output = processOutput(runResult);
+    if (runResult.error?.code === 'ETIMEDOUT') return { output: output || 'Program stopped after 5 seconds.', status: 'Time Limit Exceeded' };
+    return { output: output || '(Program finished with no output)', status: runResult.status === 0 ? 'Finished (Local Runtime)' : 'Runtime Error' };
+  } finally {
+    fs.rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
 // ----------------- API ROUTES -----------------
 
 // Health
@@ -191,92 +242,160 @@ app.get('/api/pdfs', (req, res) => {
   res.json({ pdfs: enriched });
 });
 
-// Authentication: Register
-app.post('/api/auth/register', (req, res) => {
-  const { email, password, name } = req.body || {};
-  if (!email || !email.includes('@')) {
-    return res.status(400).json({ error: 'Please enter a valid email address.' });
-  }
-  if (!password || password.length < 4) {
-    return res.status(400).json({ error: 'Password must be at least 4 characters long.' });
-  }
-
-  const users = loadUsers();
-  const normalizedEmail = email.trim().toLowerCase();
-  const existing = users.find(u => u.email.toLowerCase() === normalizedEmail);
-
-  if (existing) {
-    return res.status(409).json({ error: 'An account with this email already exists. Please sign in.' });
-  }
-
-  const newUser = {
-    id: 'usr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6),
-    name: name ? name.trim() : normalizedEmail.split('@')[0],
-    email: normalizedEmail,
-    passwordHash: hashPassword(password),
-    role: 'student',
-    createdAt: new Date().toISOString()
-  };
-
-  users.push(newUser);
-  saveUsers(users);
-
-  const token = crypto.randomBytes(32).toString('hex');
-  sessions.set(token, { userId: newUser.id, email: newUser.email, role: newUser.role, createdAt: Date.now() });
-
-  res.status(201).json({
+// Database Status Endpoint
+app.get('/api/db-status', (req, res) => {
+  res.json({
     ok: true,
-    message: 'Registration successful!',
-    token,
-    user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role }
+    database: db.getDatabaseStatus()
   });
 });
 
-// Authentication: Login
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body || {};
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required.' });
-  }
+// Authentication: Register
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, name } = req.body || {};
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+    if (!password || password.length < 4) {
+      return res.status(400).json({ error: 'Password must be at least 4 characters long.' });
+    }
 
-  const normalizedEmail = email.trim().toLowerCase();
-  const users = loadUsers();
-  let user = users.find(u => u.email.toLowerCase() === normalizedEmail);
+    const normalizedEmail = email.trim().toLowerCase();
+    let existing = null;
 
-  if (!user) {
-    // If user does not exist but provides valid credentials with 4+ chars, create their account smoothly
-    if (password.length >= 4) {
-      user = {
-        id: 'usr_' + Date.now().toString(36),
-        name: normalizedEmail.split('@')[0],
+    if (db.isDatabaseConnected()) {
+      existing = await db.findUserByEmail(normalizedEmail);
+    } else {
+      const users = loadUsers();
+      existing = users.find(u => u.email.toLowerCase() === normalizedEmail);
+    }
+
+    if (existing) {
+      return res.status(409).json({ error: 'An account with this email already exists. Please sign in.' });
+    }
+
+    const userId = 'usr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+    const userName = name ? name.trim() : normalizedEmail.split('@')[0];
+    const passwordHash = hashPassword(password);
+
+    let newUser = null;
+    if (db.isDatabaseConnected()) {
+      newUser = await db.createUser({
+        id: userId,
+        name: userName,
         email: normalizedEmail,
-        passwordHash: hashPassword(password),
+        passwordHash,
+        role: 'student'
+      });
+    } else {
+      newUser = {
+        id: userId,
+        name: userName,
+        email: normalizedEmail,
+        passwordHash,
         role: 'student',
         createdAt: new Date().toISOString()
       };
-      users.push(user);
+      const users = loadUsers();
+      users.push(newUser);
       saveUsers(users);
-    } else {
-      return res.status(401).json({ error: 'Invalid email or password.' });
     }
-  } else {
-    // Verify password (check hashed or plain demo)
-    const matchesHash = user.passwordHash === hashPassword(password);
-    const matchesPlain = user.passwordHash === password;
-    if (!matchesHash && !matchesPlain) {
-      return res.status(401).json({ error: 'Incorrect password. Please try again.' });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    sessions.set(token, { userId: newUser.id, email: newUser.email, role: newUser.role, createdAt: Date.now() });
+    if (db.isDatabaseConnected()) {
+      await db.saveSession(token, { userId: newUser.id, email: newUser.email, role: newUser.role });
     }
+
+    res.status(201).json({
+      ok: true,
+      message: 'Registration successful!',
+      token,
+      user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role }
+    });
+  } catch (err) {
+    console.error('Registration error:', err);
+    res.status(500).json({ error: 'Registration failed: ' + (err.message || err) });
   }
+});
 
-  const token = crypto.randomBytes(32).toString('hex');
-  sessions.set(token, { userId: user.id, email: user.email, role: user.role, createdAt: Date.now() });
+// Authentication: Login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required.' });
+    }
 
-  res.json({
-    ok: true,
-    message: 'Login successful!',
-    token,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role }
-  });
+    const normalizedEmail = email.trim().toLowerCase();
+    let user = null;
+
+    if (db.isDatabaseConnected()) {
+      user = await db.findUserByEmail(normalizedEmail);
+      if (!user) {
+        // If user does not exist but provides valid credentials with 4+ chars, create their account smoothly
+        if (password.length >= 4) {
+          user = await db.createUser({
+            name: normalizedEmail.split('@')[0],
+            email: normalizedEmail,
+            passwordHash: hashPassword(password),
+            role: 'student'
+          });
+        } else {
+          return res.status(401).json({ error: 'Invalid email or password.' });
+        }
+      } else {
+        // Verify password (check hashed or plain demo)
+        const matchesHash = user.passwordHash === hashPassword(password);
+        const matchesPlain = user.passwordHash === password;
+        if (!matchesHash && !matchesPlain) {
+          return res.status(401).json({ error: 'Incorrect password. Please try again.' });
+        }
+      }
+    } else {
+      const users = loadUsers();
+      user = users.find(u => u.email.toLowerCase() === normalizedEmail);
+      if (!user) {
+        if (password.length >= 4) {
+          user = {
+            id: 'usr_' + Date.now().toString(36),
+            name: normalizedEmail.split('@')[0],
+            email: normalizedEmail,
+            passwordHash: hashPassword(password),
+            role: 'student',
+            createdAt: new Date().toISOString()
+          };
+          users.push(user);
+          saveUsers(users);
+        } else {
+          return res.status(401).json({ error: 'Invalid email or password.' });
+        }
+      } else {
+        const matchesHash = user.passwordHash === hashPassword(password);
+        const matchesPlain = user.passwordHash === password;
+        if (!matchesHash && !matchesPlain) {
+          return res.status(401).json({ error: 'Incorrect password. Please try again.' });
+        }
+      }
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    sessions.set(token, { userId: user.id, email: user.email, role: user.role, createdAt: Date.now() });
+    if (db.isDatabaseConnected()) {
+      await db.saveSession(token, { userId: user.id, email: user.email, role: user.role });
+    }
+
+    res.json({
+      ok: true,
+      message: 'Login successful!',
+      token,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+    });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Login failed: ' + (err.message || err) });
+  }
 });
 
 // Authentication: Admin Login
@@ -296,27 +415,79 @@ app.post('/api/auth/admin-login', (req, res) => {
 });
 
 // Authentication: Current user profile
-app.get('/api/auth/me', (req, res) => {
+app.get('/api/auth/me', async (req, res) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
 
-  if (!token || !sessions.has(token)) {
+  if (!token) {
     return res.status(401).json({ ok: false, error: 'Unauthorized session.' });
   }
 
-  const session = sessions.get(token);
+  let session = sessions.get(token);
+  if (!session && db.isDatabaseConnected()) {
+    session = await db.getSession(token);
+    if (session) {
+      sessions.set(token, session);
+    }
+  }
+
+  if (!session) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized session.' });
+  }
+
   res.json({ ok: true, session });
 });
 
 // Authentication: Logout
-app.post('/api/auth/logout', (req, res) => {
+app.post('/api/auth/logout', async (req, res) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (token) {
     sessions.delete(token);
+    if (db.isDatabaseConnected()) {
+      await db.deleteSession(token);
+    }
   }
   res.json({ ok: true, message: 'Logged out successfully.' });
 });
+
+// Admin: Get All Registered Users
+app.get('/api/users', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+    // Verify admin token
+    let session = sessions.get(token);
+    if (!session && db.isDatabaseConnected()) {
+      session = await db.getSession(token);
+    }
+
+    if (!session || session.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin only.' });
+    }
+
+    let users = [];
+    if (db.isDatabaseConnected()) {
+      users = await db.getAllUsers();
+    } else {
+      const allUsers = loadUsers();
+      users = allUsers.map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt
+      }));
+    }
+
+    res.json({ ok: true, users, total: users.length });
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    res.status(500).json({ error: 'Failed to fetch users: ' + err.message });
+  }
+});
+
 
 // Online Compiler Execution Endpoint
 app.post('/api/execute', async (req, res) => {
@@ -382,30 +553,10 @@ app.post('/api/execute', async (req, res) => {
       }
     }
 
-    // 2. LOCAL PYTHON RUNNER (IF LOCAL PYTHON IS AVAILABLE)
-    if (lang === 'python' && !JUDGE0_URL && localPythonCmd) {
-      try {
-        const execRes = spawnSync(localPythonCmd, ['-c', code], {
-          encoding: 'utf8',
-          timeout: 4000,
-          maxBuffer: 1024 * 512
-        });
-        const duration = Date.now() - startTime;
-        const stdout = execRes.stdout || '';
-        const stderr = execRes.stderr || '';
-        const output = [stdout, stderr].filter(Boolean).join('\n') || '(Program finished with no output)';
-        return res.json({
-          output,
-          status: execRes.status === 0 ? 'Finished (Local Python)' : 'Runtime Error',
-          executionTimeMs: duration
-        });
-      } catch (pyErr) {
-        return res.json({
-          output: 'Python execution error: ' + pyErr.message,
-          status: 'Execution Error',
-          executionTimeMs: Date.now() - startTime
-        });
-      }
+    // 2. LOCAL COMPILERS (C, C++, Java and Python)
+    const localResult = executeLocalProgram(lang, code);
+    if (localResult) {
+      return res.json({ ...localResult, executionTimeMs: Date.now() - startTime });
     }
 
     // 3. REMOTE EXECUTION VIA JUDGE0 IF CONFIGURED
@@ -498,6 +649,7 @@ if (require.main === module) {
     console.log(`=======================================================`);
     console.log(`🚀 Coding Hub — Coding with Suninda`);
     console.log(`📡 Server running at: http://localhost:${PORT}`);
+    console.log(`🗄️  Database: Aiven MySQL (DB: ${process.env.DB_NAME || 'coding_hub'})`);
     console.log(`✨ JavaScript compiler: Direct Node.js native execution`);
     console.log(`🐍 Python compiler: ${localPythonCmd ? 'Local (' + localPythonCmd + ')' : 'Requires JUDGE0_URL or Python'}`);
     console.log(`⚙️  Judge0 Gateway: ${JUDGE0_URL ? JUDGE0_URL : 'Not configured (optional in .env)'}`);

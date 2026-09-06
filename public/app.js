@@ -103,7 +103,7 @@ function userLogout() {
     fetch('/api/auth/logout', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` }
-    }).catch(() => {});
+    }).catch(() => { });
   }
   localStorage.removeItem('ch_session');
   localStorage.removeItem('ch_token');
@@ -117,25 +117,24 @@ function setupLogin() {
 
   if (localStorage.getItem('ch_session') === '1') {
     enterWorkspace();
+    return;
   }
 
   let isRegisterMode = false;
-  const tabSignIn = document.getElementById('tabSignIn');
-  const tabSignUp = document.getElementById('tabSignUp');
-  const nameFieldGroup = document.getElementById('nameFieldGroup');
-  const formEyebrow = document.getElementById('formEyebrow');
-  const formTitle = document.getElementById('formTitle');
-  const formSubtitle = document.getElementById('formSubtitle');
-  const btnText = document.getElementById('btnText');
-  const submitBtn = document.getElementById('submitBtn');
-  const switchCopy = document.getElementById('switchCopy');
-  const emailInput = document.getElementById('loginEmail');
-  const passwordInput = document.getElementById('loginPassword');
-  const nameInput = document.getElementById('loginName');
-  const quickDemoBtn = document.getElementById('quickDemoBtn');
-  const messageBox = document.getElementById('loginMessageBox');
-  const messageText = document.getElementById('loginMessageText');
-  const messageIcon = document.getElementById('loginMessageIcon');
+
+  // Helper: always get fresh DOM references
+  function el(id) { return document.getElementById(id); }
+
+  const tabSignIn = el('tabSignIn');
+  const tabSignUp = el('tabSignUp');
+  const nameFieldGroup = el('nameFieldGroup');
+  const emailInput = el('loginEmail');
+  const passwordInput = el('loginPassword');
+  const nameInput = el('loginName');
+  const quickDemoBtn = el('quickDemoBtn');
+  const messageBox = el('loginMessageBox');
+  const messageText = el('loginMessageText');
+  const messageIcon = el('loginMessageIcon');
 
   function showStatus(text, type = 'success') {
     if (messageBox) {
@@ -156,19 +155,24 @@ function setupLogin() {
       if (tabSignUp) { tabSignUp.classList.add('active'); tabSignUp.setAttribute('aria-selected', 'true'); }
       if (tabSignIn) { tabSignIn.classList.remove('active'); tabSignIn.setAttribute('aria-selected', 'false'); }
       if (nameFieldGroup) nameFieldGroup.style.display = 'block';
+      if (nameInput) nameInput.setAttribute('required', 'required');
       if (formEyebrow) formEyebrow.textContent = 'JOIN CODING HUB';
       if (formTitle) formTitle.textContent = 'Create your account';
       if (formSubtitle) formSubtitle.textContent = 'Start learning, practicing, and compiling code in seconds.';
       if (btnText) btnText.textContent = 'Create Free Account';
+      if (submitBtn) submitBtn.textContent = '';
+      if (submitBtn) submitBtn.innerHTML = '<span id="btnText">Create Free Account</span><span class="btn-arrow" aria-hidden="true">↗</span>';
       if (switchCopy) switchCopy.innerHTML = 'Already have an account? <a href="#" id="switchModeLink" class="accent-link">Sign in</a>';
     } else {
       if (tabSignIn) { tabSignIn.classList.add('active'); tabSignIn.setAttribute('aria-selected', 'true'); }
       if (tabSignUp) { tabSignUp.classList.remove('active'); tabSignUp.setAttribute('aria-selected', 'false'); }
       if (nameFieldGroup) nameFieldGroup.style.display = 'none';
+      if (nameInput) nameInput.removeAttribute('required');
       if (formEyebrow) formEyebrow.textContent = 'WELCOME BACK';
       if (formTitle) formTitle.textContent = 'Sign in to your workspace';
       if (formSubtitle) formSubtitle.textContent = 'Continue where you left off and keep your coding streak alive.';
       if (btnText) btnText.textContent = 'Sign in to Coding Hub';
+      if (submitBtn) submitBtn.innerHTML = '<span id="btnText">Sign in to Coding Hub</span><span class="btn-arrow" aria-hidden="true">↗</span>';
       if (switchCopy) switchCopy.innerHTML = 'New to Coding Hub? <a href="#" id="switchModeLink" class="accent-link">Create an account</a>';
     }
     hideStatus();
@@ -200,19 +204,29 @@ function setupLogin() {
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    event.stopPropagation();
+
+    // Re-fetch btnText in case DOM was rebuilt by setMode
+    const currentBtnText = document.getElementById('btnText');
     const email = emailInput ? emailInput.value.trim() : '';
     const password = passwordInput ? passwordInput.value : '';
     const name = nameInput ? nameInput.value.trim() : '';
 
     if (!email || !email.includes('@')) {
-      showStatus('Enter a valid email address.', 'error');
+      showStatus('একটি সঠিক ইমেইল দিন। (Enter a valid email address.)', 'error');
       if (emailInput) emailInput.focus();
       return;
     }
 
     if (password.length < 4) {
-      showStatus('Password must be at least 4 characters long.', 'error');
+      showStatus('(Min 4 characters.)', 'error');
       if (passwordInput) passwordInput.focus();
+      return;
+    }
+
+    if (isRegisterMode && !name) {
+      showStatus(' (Name is required for registration.)', 'error');
+      if (nameInput) nameInput.focus();
       return;
     }
 
@@ -220,7 +234,7 @@ function setupLogin() {
       submitBtn.disabled = true;
       submitBtn.classList.add('loading');
     }
-    if (btnText) btnText.textContent = isRegisterMode ? 'Creating Account…' : 'Signing In…';
+    if (currentBtnText) currentBtnText.textContent = isRegisterMode ? 'Creating Account…' : 'Signing In…';
     hideStatus();
 
     try {
@@ -249,17 +263,20 @@ function setupLogin() {
       }
 
       showStatus(
-        isRegisterMode ? `Account created! Welcome, ${data.user?.name || email}!` : `Welcome back, ${data.user?.name || email}! Launching workspace…`,
+        isRegisterMode
+          ? `✅ Account created! Welcome, ${data.user?.name || email}!`
+          : `✅ Welcome back, ${data.user?.name || email}! Launching workspace…`,
         'success'
       );
-      setTimeout(() => enterWorkspace(data.user), 550);
+      setTimeout(() => enterWorkspace(data.user), 800);
     } catch (err) {
-      showStatus(err.message, 'error');
+      showStatus('⚠️ ' + err.message, 'error');
       if (submitBtn) {
         submitBtn.disabled = false;
         submitBtn.classList.remove('loading');
       }
-      if (btnText) btnText.textContent = isRegisterMode ? 'Create Free Account' : 'Sign in to Coding Hub';
+      const resetBtnText = document.getElementById('btnText');
+      if (resetBtnText) resetBtnText.textContent = isRegisterMode ? 'Create Free Account' : 'Sign in to Coding Hub';
     }
   });
 
@@ -277,6 +294,26 @@ function setupLogin() {
       showStatus('Google sign-in is ready to connect to OAuth provider.', 'info');
     };
   }
+
+  // Update live database connection status badge
+  async function updateDbStatus() {
+    const text = document.getElementById('appDbStatusText');
+    const pill = document.getElementById('appDbStatusPill');
+    const dot = pill ? pill.querySelector('.status-indicator') : null;
+    try {
+      const res = await fetch('/api/db-status');
+      const data = await res.json();
+      if (data && data.database && data.database.connected) {
+        if (text) text.textContent = `Aiven MySQL Connected • ${data.database.database}`;
+        if (dot) dot.style.background = '#10b981';
+      } else {
+        if (text) text.textContent = 'Node.js Backend • Local Mode';
+      }
+    } catch {
+      if (text) text.textContent = 'Node.js Backend • localhost:3000';
+    }
+  }
+  updateDbStatus();
 }
 
 async function renderCourses() {
@@ -487,7 +524,62 @@ async function renderAdmin() {
           `;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
+
+    // Auto-load users table
+    loadUsersTable();
+  }
+}
+
+async function loadUsersTable() {
+  const tbody = document.getElementById('usersTableBody');
+  const badge = document.getElementById('userCountBadge');
+  if (!tbody) return;
+
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color: #64748b;">Loading users...</td></tr>';
+
+  try {
+    const adminToken = localStorage.getItem('ch_admin_token');
+    const res = await fetch('/api/users', {
+      headers: adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {}
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 20px; color: #f87171;">⚠️ ${err.error || 'Failed to load users'}</td></tr>`;
+      return;
+    }
+
+    const data = await res.json();
+    const users = data.users || [];
+
+    if (badge) badge.textContent = `${users.length} User${users.length !== 1 ? 's' : ''}`;
+
+    if (users.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color: #64748b;">No registered users yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = users.map((u, i) => {
+      const joined = u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+      const roleColor = u.role === 'admin' ? '#fbbf24' : '#34d399';
+      const rowBg = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
+      return `
+        <tr style="background: ${rowBg}; border-top: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;"
+            onmouseover="this.style.background='rgba(96,165,250,0.06)'" onmouseout="this.style.background='${rowBg}'">
+          <td style="padding: 10px 14px; color: #64748b; font-size: 0.8rem;">${i + 1}</td>
+          <td style="padding: 10px 14px; color: #e2e8f0; font-weight: 500;">${u.name || '—'}</td>
+          <td style="padding: 10px 14px; color: #94a3b8;">${u.email}</td>
+          <td style="padding: 10px 14px;">
+            <span style="background: ${roleColor}1a; color: ${roleColor}; padding: 2px 8px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">${u.role || 'student'}</span>
+          </td>
+          <td style="padding: 10px 14px; color: #64748b; font-size: 0.82rem;">${joined}</td>
+        </tr>
+      `;
+    }).join('');
+
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 20px; color: #f87171;">⚠️ Error: ${err.message}</td></tr>`;
   }
 }
 
@@ -531,6 +623,6 @@ document.addEventListener('DOMContentLoaded', () => {
   typeLoop();
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js').catch(() => { });
   }
 });
